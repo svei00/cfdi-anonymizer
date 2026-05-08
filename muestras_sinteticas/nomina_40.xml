@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:nomina12="http://www.sat.gob.mx/nomina12" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Version="4.0" Serie="N" Folio="123" Fecha="2024-01-15T12:00:00" Sello="SELLO_REAL_DEL_EMISOR_BASE64==" FormaPago="99" NoCertificado="00001000000500003416" Certificado="CERTIFICADO_REAL_QUE_EMBEBE_RFC_Y_NOMBRE==" SubTotal="10000.00" Descuento="500.00" Moneda="MXN" Total="9500.00" TipoDeComprobante="N" Exportacion="01" MetodoPago="PUE" LugarExpedicion="64000">
+  <cfdi:Emisor Rfc="FCA0306013X1" Nombre="FERRETERIAS CALZADA SA DE CV" RegimenFiscal="601"/>
+  <cfdi:Receptor Rfc="PEGJ850312AB1" Nombre="JUAN PEREZ GARCIA" DomicilioFiscalReceptor="64000" RegimenFiscalReceptor="605" UsoCFDI="CN01"/>
+  <cfdi:Conceptos>
+    <cfdi:Concepto ClaveProdServ="84111505" Cantidad="1" ClaveUnidad="ACT" Descripcion="Pago de nómina" ValorUnitario="10000.00" Importe="10000.00" Descuento="500.00" ObjetoImp="01"/>
+  </cfdi:Conceptos>
+  <cfdi:Complemento>
+    <nomina12:Nomina Version="1.2" TipoNomina="O" FechaPago="2024-01-15" FechaInicialPago="2024-01-01" FechaFinalPago="2024-01-15" NumDiasPagados="15" TotalPercepciones="10000.00" TotalDeducciones="500.00">
+      <nomina12:Emisor RegistroPatronal="Y5550709108" RfcPatronOrigen="FCA0306013X1"/>
+      <nomina12:Receptor Curp="PEGJ850312HNLRRN09" NumSeguridadSocial="12345678901" FechaInicioRelLaboral="2020-03-01" Antigüedad="P200W" TipoContrato="01" TipoRegimen="02" NumEmpleado="0042" Departamento="Ventas" Puesto="Vendedor" RiesgoPuesto="1" PeriodicidadPago="15" CuentaBancaria="012180001234567895" SalarioDiarioIntegrado="350.00" SalarioBaseCotApor="333.33"/>
+      <nomina12:Percepciones TotalSueldos="10000.00" TotalGravado="9000.00" TotalExento="1000.00">
+        <nomina12:Percepcion TipoPercepcion="001" Clave="001" Concepto="Sueldo" ImporteGravado="9000.00" ImporteExento="1000.00"/>
+      </nomina12:Percepciones>
+    </nomina12:Nomina>
+  </cfdi:Complemento>
+  <cfdi:Complemento>
+    <tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" Version="1.1" UUID="1BF1A56C-1111-2222-3333-0000000FB29A" FechaTimbrado="2024-01-15T12:01:00" RfcProvCertif="SAT970701NN3" SelloCFD="SELLO_CFD_REAL_BASE64==" NoCertificadoSAT="00001000000400000001" SelloSAT="SELLO_SAT_REAL_BASE64=="/>
+  </cfdi:Complemento>
+</cfdi:Comprobante>

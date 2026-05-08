@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Version="4.0" Serie="C" Folio="789" Fecha="2024-03-05T09:00:00" Sello="SELLO_REAL==" NoCertificado="00001000000500003416" Certificado="CERT_REAL==" SubTotal="3500.00" Moneda="MXN" Total="3500.00" TipoDeComprobante="I" Exportacion="01" MetodoPago="PUE" FormaPago="01" LugarExpedicion="44100">
+  <cfdi:Emisor Rfc="CEC100101AB3" Nombre="COLEGIO EL COSCORRON SC" RegimenFiscal="603"/>
+  <cfdi:Receptor Rfc="GAML800101AB2" Nombre="MARIA GARCIA LOPEZ" DomicilioFiscalReceptor="44100" RegimenFiscalReceptor="612" UsoCFDI="D10"/>
+  <cfdi:Conceptos>
+    <cfdi:Concepto ClaveProdServ="86121800" Cantidad="1" ClaveUnidad="E48" Descripcion="Colegiatura mensual" ValorUnitario="3500.00" Importe="3500.00" ObjetoImp="02">
+      <cfdi:ComplementoConcepto>
+        <iedu:instEducativas xmlns:iedu="http://www.sat.gob.mx/iedu" version="1.0" nombreAlumno="MARIA FERNANDA LOPEZ RUIZ" CURP="LORM100505MDFPZR05" autRVOE="20071921" nivelEducativo="Primaria" rfcPago="GAML800101AB2"/>
+      </cfdi:ComplementoConcepto>
+    </cfdi:Concepto>
+  </cfdi:Conceptos>
+  <cfdi:Complemento>
+    <tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" Version="1.1" UUID="BBBB1111-2222-3333-4444-555566667777" FechaTimbrado="2024-03-05T09:01:00" RfcProvCertif="SAT970701NN3" SelloCFD="SELLO_CFD==" NoCertificadoSAT="00001000000400000001" SelloSAT="SELLO_SAT=="/>
+  </cfdi:Complemento>
+</cfdi:Comprobante>
