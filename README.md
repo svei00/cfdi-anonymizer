@@ -16,6 +16,10 @@ falsos **consistentes**, conserva importes/impuestos/conceptos/fechas, y es
 
 ## Uso (GUI)
 
+- **Windows**: doble clic en **`Ejecutar.bat`** (instala dependencias la 1ª vez).
+- **Linux/macOS**: `chmod +x ejecutar.sh` y luego `./ejecutar.sh`.
+- **Manual** (cualquier SO):
+
 ```
 python main.py
 ```
