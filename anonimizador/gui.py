@@ -57,7 +57,7 @@ class App(ttk.Frame):
         ops.columnconfigure(1, weight=1)
         ttk.Checkbutton(ops, text="Conservar una copia de los originales",
                         variable=self.var_keep).grid(row=0, column=0, sticky="w")
-        ttk.Checkbutton(ops, text="Usar estructura Bóveda en el destino",
+        ttk.Checkbutton(ops, text="El origen es una Bóveda (RFC/Emitidas/Recibidas)",
                         variable=self.var_boveda).grid(row=0, column=1, sticky="w")
         ttk.Checkbutton(ops, text="Alterar salarios de Nómina (jitter)",
                         variable=self.var_jitter).grid(row=1, column=0, sticky="w")
@@ -151,14 +151,18 @@ class App(ttk.Frame):
             db_dir = cfg["mapeo"] or cfg["destino"]
             proc = Procesador(
                 cfg["destino"], db_dir=db_dir, seed=cfg["seed"],
-                jitter_salarios=cfg["jitter"], usar_boveda=cfg["boveda"],
-                keep_originales=cfg["keep"],
+                jitter_salarios=cfg["jitter"], keep_originales=cfg["keep"],
             )
 
             def progreso(i, n, nombre):
                 self.cola.put(("progreso", i, n, nombre))
 
-            if cfg["revertir"]:
+            if cfg["boveda"]:
+                if cfg["revertir"]:
+                    res = proc.revertir_boveda(cfg["origen"], cfg["destino"], progreso)
+                else:
+                    res = proc.procesar_boveda(cfg["origen"], cfg["destino"], progreso)
+            elif cfg["revertir"]:
                 res = proc.revertir_carpeta(cfg["origen"], cfg["destino"], progreso)
             else:
                 res = proc.procesar_carpeta(cfg["origen"], progreso)
@@ -180,9 +184,13 @@ class App(ttk.Frame):
                 elif tipo == "fin":
                     _, res, era_revertir = msg
                     verbo = "Revertidos" if era_revertir else "Enmascarados"
+                    extra = f" | carpetas: {res.carpetas}" if res.carpetas else ""
                     self.estado.configure(
-                        text=f"{verbo}: {res.exitosos}/{res.total} | errores: {len(res.errores)}")
-                    self._log(f"--- {verbo}: {res.exitosos}/{res.total} ---")
+                        text=f"{verbo}: {res.exitosos}/{res.total}{extra} | "
+                             f"avisos: {len(res.avisos)} | errores: {len(res.errores)}")
+                    self._log(f"--- {verbo}: {res.exitosos}/{res.total}{extra} ---")
+                    for aviso in res.avisos:
+                        self._log(f"  AVISO {aviso}")
                     for nombre, err in res.errores:
                         self._log(f"  ERROR {nombre}: {err}")
                     self.btn.configure(state="normal")

@@ -44,6 +44,9 @@ def cargar_y_enmascarar(in_path: Path | str, ctx: MaskContext):
     """
     tree = etree.parse(str(in_path), _PARSER)
     root = tree.getroot()
+    # RFC originales ANTES de enmascarar (para validar contra la carpeta).
+    orig_emisor = _attr_primer_hijo(root, "Emisor", "Rfc")
+    orig_receptor = _attr_primer_hijo(root, "Receptor", "Rfc")
     # Reiniciar el estado por-documento (evita arrastrar entidades de otro
     # archivo cuando se reutiliza el mismo contexto en lote).
     ctx.emisor_entidad = None
@@ -52,6 +55,8 @@ def cargar_y_enmascarar(in_path: Path | str, ctx: MaskContext):
 
     nuevo_uuid = _uuid_falso(root)
     meta = {
+        "orig_emisor_rfc": orig_emisor,
+        "orig_receptor_rfc": orig_receptor,
         "emisor_rfc": _attr_primer_hijo(root, "Emisor", "Rfc"),
         "receptor_rfc": _attr_primer_hijo(root, "Receptor", "Rfc"),
         "fecha": root.get("Fecha", ""),

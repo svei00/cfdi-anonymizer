@@ -11,13 +11,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from boveda import CARPETA_BOVEDA_DEFAULT, EMITIDAS, ruta_boveda
+from lxml import etree
+
+from boveda import (CARPETA_BOVEDA_DEFAULT, EMITIDAS, RECIBIDAS,
+                    clasificacion_de_ruta, es_rfc_valido, ruta_boveda)
 
 from .fake_factory import FakeFactory
 from .mapping_db import MappingDB
 from .masking import MaskContext, cargar_y_enmascarar, escribir_arbol
 from .nombres_db import NombresDB
-from .revertir import construir_reverso, revertir_archivo
+from .revertir import construir_reverso, revertir_archivo, revertir_arbol
 
 Progreso = Callable[[int, int, str], None]
 
@@ -28,6 +31,8 @@ class Resultado:
     exitosos: int = 0
     errores: list[tuple[str, str]] = field(default_factory=list)
     salidas: list[Path] = field(default_factory=list)
+    avisos: list[str] = field(default_factory=list)
+    carpetas: int = 0
 
 
 class Procesador:
@@ -102,6 +107,141 @@ class Procesador:
                 res.errores.append((x.name, f"{type(e).__name__}: {e}"))
             if progreso:
                 progreso(i, len(archivos), x.name)
+        return res
+
+    # ==================================================================
+    # Modo Bóveda (espejo): refleja <RFC>/<Emitidas|Recibidas>/<yyyy>/<MM>
+    # renombrando SÓLO la carpeta de RFC a su fake; conserva el resto.
+    # ==================================================================
+    @staticmethod
+    def _tag_de_clasif(clasif: str | None) -> str | None:
+        if clasif == EMITIDAS:
+            return "Emisor"
+        if clasif == RECIBIDAS:
+            return "Receptor"
+        return None
+
+    @staticmethod
+    def _leer_tag(xml_path: Path, tag_local: str) -> tuple[str | None, str | None]:
+        """Lee (Rfc, Nombre) de un hijo directo del Comprobante (Emisor/Receptor)."""
+        try:
+            root = etree.parse(str(xml_path)).getroot()
+        except etree.XMLSyntaxError:
+            return None, None
+        for el in root:
+            if isinstance(el.tag, str) and etree.QName(el).localname == tag_local:
+                return el.get("Rfc"), el.get("Nombre")
+        return None, None
+
+    def _nombre_dueno(self, carpeta: Path, folder_rfc: str,
+                      xmls: list[Path]) -> str | None:
+        """Nombre del titular de la carpeta (desde el primer XML cuyo tag
+        Emisor/Receptor coincide con el RFC de la carpeta)."""
+        for xml in xmls:
+            tag = self._tag_de_clasif(clasificacion_de_ruta(xml.relative_to(carpeta)))
+            if not tag:
+                continue
+            rfc, nombre = self._leer_tag(xml, tag)
+            if rfc and rfc.strip().upper() == folder_rfc:
+                return nombre
+        return None
+
+    def procesar_boveda(self, source_root: Path | str,
+                        dest_root: Path | str | None = None,
+                        progreso: Progreso | None = None) -> Resultado:
+        source_root = Path(source_root)
+        dest_root = Path(dest_root) if dest_root else self.dest
+        res = Resultado()
+
+        # Reunir carpetas de RFC válidas y contar archivos (para el progreso).
+        plan: list[tuple[Path, list[Path]]] = []
+        for d in sorted(p for p in source_root.iterdir() if p.is_dir()):
+            if not es_rfc_valido(d.name):
+                res.avisos.append(f"Carpeta ignorada (no es un RFC): {d.name}")
+                continue
+            xmls = sorted(x for x in d.rglob("*.xml") if x.is_file())
+            if not xmls:
+                res.avisos.append(f"Carpeta sin XML: {d.name}")
+                continue
+            plan.append((d, xmls))
+            res.total += len(xmls)
+
+        hecho = 0
+        for carpeta, xmls in plan:
+            folder_rfc = carpeta.name.strip().upper()
+            nombre = self._nombre_dueno(carpeta, folder_rfc, xmls)
+            fake_folder = self.factory.entidad(folder_rfc, nombre or "").fake_rfc
+            res.carpetas += 1
+
+            for xml in xmls:
+                hecho += 1
+                rel = xml.relative_to(carpeta)
+                try:
+                    clasif = clasificacion_de_ruta(rel)
+                    tree, meta = cargar_y_enmascarar(xml, self.ctx)
+
+                    # Validar que el tag dueño coincide con la carpeta.
+                    if clasif == EMITIDAS:
+                        real = meta.get("orig_emisor_rfc")
+                    elif clasif == RECIBIDAS:
+                        real = meta.get("orig_receptor_rfc")
+                    else:
+                        real = None
+                        res.avisos.append(f"Sin Emitidas/Recibidas: {carpeta.name}/{rel}")
+                    if real and real.strip().upper() != folder_rfc:
+                        res.avisos.append(
+                            f"Desubicado en {carpeta.name}/{rel}: "
+                            f"tag={real} != carpeta={folder_rfc}")
+
+                    out_path = dest_root / fake_folder / rel.parent / meta["nuevo_nombre"]
+                    escribir_arbol(tree, out_path)
+                    self.mapping.registrar_archivo(xml.name, meta["nuevo_nombre"], str(xml))
+                    if not self.keep_originales:
+                        xml.unlink()
+                    res.salidas.append(out_path)
+                    res.exitosos += 1
+                except Exception as e:  # un archivo malo no detiene el lote
+                    res.errores.append((f"{carpeta.name}/{rel}", f"{type(e).__name__}: {e}"))
+                if progreso:
+                    progreso(hecho, res.total, xml.name)
+        return res
+
+    def revertir_boveda(self, masked_root: Path | str, dest_root: Path | str,
+                        progreso: Progreso | None = None) -> Resultado:
+        """Revierte un espejo enmascarado a la estructura real (carpetas RFC
+        reales y nombres de archivo originales)."""
+        masked_root = Path(masked_root)
+        dest_root = Path(dest_root)
+        reverso = construir_reverso(self.mapping)
+        res = Resultado()
+
+        plan: list[tuple[Path, str, list[Path]]] = []
+        for d in sorted(p for p in masked_root.iterdir() if p.is_dir()):
+            if not es_rfc_valido(d.name):
+                continue
+            ent = self.mapping.buscar_entidad_por_fake(d.name.strip().upper())
+            real_folder = ent.real_rfc if ent else d.name
+            xmls = sorted(x for x in d.rglob("*.xml") if x.is_file())
+            plan.append((d, real_folder, xmls))
+            res.total += len(xmls)
+
+        hecho = 0
+        for carpeta, real_folder, xmls in plan:
+            res.carpetas += 1
+            for xml in xmls:
+                hecho += 1
+                rel = xml.relative_to(carpeta)
+                try:
+                    tree = etree.parse(str(xml))
+                    revertir_arbol(tree.getroot(), reverso)
+                    fila = self.mapping.archivo_por_nuevo(xml.name)
+                    nombre = fila["original_filename"] if fila else xml.name
+                    escribir_arbol(tree, dest_root / real_folder / rel.parent / nombre)
+                    res.exitosos += 1
+                except Exception as e:
+                    res.errores.append((f"{carpeta.name}/{rel}", f"{type(e).__name__}: {e}"))
+                if progreso:
+                    progreso(hecho, res.total, xml.name)
         return res
 
     def close(self):

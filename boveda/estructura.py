@@ -2,12 +2,35 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 EMITIDAS = "Emitidas"
 RECIBIDAS = "Recibidas"
 # "Bóveda" se usa por defecto; puede cambiarse para no confundir con MiAdminXML.
 CARPETA_BOVEDA_DEFAULT = "Bóveda"
+
+# RFC: 3 letras (moral) o 4 (física) + AAMMDD + homoclave de 3.
+RFC_RE = re.compile(r"^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$", re.IGNORECASE)
+
+
+def es_rfc_valido(nombre: str) -> bool:
+    """True si el nombre tiene forma de RFC (para detectar carpetas de RFC)."""
+    return bool(RFC_RE.match((nombre or "").strip()))
+
+
+def clasificacion_de_ruta(rel_path: Path | str) -> str | None:
+    """Determina Emitidas/Recibidas a partir de las carpetas de la ruta.
+
+    Se usa al recorrer una Bóveda existente (<RFC>/<Emitidas|Recibidas>/...).
+    """
+    for parte in Path(rel_path).parts:
+        p = parte.lower()
+        if p == EMITIDAS.lower():
+            return EMITIDAS
+        if p == RECIBIDAS.lower():
+            return RECIBIDAS
+    return None
 
 
 def clasificacion(target_rfc: str, emisor_rfc: str, receptor_rfc: str) -> str | None:
