@@ -154,6 +154,13 @@ class App(ttk.Frame):
                 jitter_salarios=cfg["jitter"], keep_originales=cfg["keep"],
             )
 
+            modo = "Bóveda (espejo)" if cfg["boveda"] else "Carpeta plana"
+            accion = "REVERTIR" if cfg["revertir"] else "ENMASCARAR"
+            self.cola.put(("info", f"===== {accion} | modo: {modo} ====="))
+            self.cola.put(("info", f"Origen:  {cfg['origen']}"))
+            self.cola.put(("info", f"Destino: {cfg['destino']}"))
+            self.cola.put(("info", f"Mapeo:   {db_dir}  (mapeo.sqlite)"))
+
             def progreso(i, n, nombre):
                 self.cola.put(("progreso", i, n, nombre))
 
@@ -176,7 +183,9 @@ class App(ttk.Frame):
             while True:
                 msg = self.cola.get_nowait()
                 tipo = msg[0]
-                if tipo == "progreso":
+                if tipo == "info":
+                    self._log(msg[1])
+                elif tipo == "progreso":
                     _, i, n, nombre = msg
                     self.barra.configure(maximum=n, value=i)
                     self.estado.configure(text=f"[{i}/{n}] {nombre}")
@@ -185,6 +194,8 @@ class App(ttk.Frame):
                     _, res, era_revertir = msg
                     verbo = "Revertidos" if era_revertir else "Enmascarados"
                     extra = f" | carpetas: {res.carpetas}" if res.carpetas else ""
+                    for linea in res.detalle:
+                        self._log(f"  {linea}")
                     self.estado.configure(
                         text=f"{verbo}: {res.exitosos}/{res.total}{extra} | "
                              f"avisos: {len(res.avisos)} | errores: {len(res.errores)}")

@@ -32,6 +32,7 @@ class Resultado:
     errores: list[tuple[str, str]] = field(default_factory=list)
     salidas: list[Path] = field(default_factory=list)
     avisos: list[str] = field(default_factory=list)
+    detalle: list[str] = field(default_factory=list)
     carpetas: int = 0
 
 
@@ -114,6 +115,25 @@ class Procesador:
     # renombrando SÓLO la carpeta de RFC a su fake; conserva el resto.
     # ==================================================================
     @staticmethod
+    def _detectar_carpetas_rfc(source_root: Path) -> list[Path]:
+        """Devuelve las carpetas de RFC a procesar.
+
+        Acepta dos formas de origen:
+          1) la BÓVEDA raíz (con subcarpetas de RFC), o
+          2) UNA carpeta de RFC (que contiene Emitidas/Recibidas adentro, o
+             cuyo nombre ya es un RFC).
+        """
+        source_root = Path(source_root)
+        subdirs = [p for p in source_root.iterdir() if p.is_dir()]
+        sub_lower = {p.name.lower() for p in subdirs}
+        es_carpeta_rfc = (EMITIDAS.lower() in sub_lower
+                          or RECIBIDAS.lower() in sub_lower
+                          or es_rfc_valido(source_root.name))
+        if es_carpeta_rfc:
+            return [source_root]
+        return sorted(subdirs, key=lambda p: p.name)
+
+    @staticmethod
     def _tag_de_clasif(clasif: str | None) -> str | None:
         if clasif == EMITIDAS:
             return "Emisor"
@@ -154,17 +174,27 @@ class Procesador:
         res = Resultado()
 
         # Reunir carpetas de RFC válidas y contar archivos (para el progreso).
+        carpetas = self._detectar_carpetas_rfc(source_root)
+        res.detalle.append(f"Origen: {source_root}")
+        res.detalle.append(f"Destino: {dest_root}")
+        res.detalle.append(f"Carpetas candidatas encontradas: {len(carpetas)}")
         plan: list[tuple[Path, list[Path]]] = []
-        for d in sorted(p for p in source_root.iterdir() if p.is_dir()):
+        for d in carpetas:
             if not es_rfc_valido(d.name):
                 res.avisos.append(f"Carpeta ignorada (no es un RFC): {d.name}")
                 continue
             xmls = sorted(x for x in d.rglob("*.xml") if x.is_file())
             if not xmls:
-                res.avisos.append(f"Carpeta sin XML: {d.name}")
+                res.avisos.append(f"Carpeta de RFC sin XML: {d.name}")
                 continue
             plan.append((d, xmls))
             res.total += len(xmls)
+
+        if not plan:
+            res.avisos.append(
+                "No se encontraron carpetas de RFC con XML. Selecciona la Bóveda "
+                "raíz (con subcarpetas de RFC) o una carpeta de RFC (que tenga "
+                "Emitidas/Recibidas adentro).")
 
         hecho = 0
         for carpeta, xmls in plan:
@@ -172,6 +202,9 @@ class Procesador:
             nombre = self._nombre_dueno(carpeta, folder_rfc, xmls)
             fake_folder = self.factory.entidad(folder_rfc, nombre or "").fake_rfc
             res.carpetas += 1
+            res.detalle.append(
+                f"RFC {folder_rfc} ({nombre or 'sin nombre'}) -> {fake_folder}"
+                f"  [{len(xmls)} XML]")
 
             for xml in xmls:
                 hecho += 1
@@ -216,14 +249,16 @@ class Procesador:
         res = Resultado()
 
         plan: list[tuple[Path, str, list[Path]]] = []
-        for d in sorted(p for p in masked_root.iterdir() if p.is_dir()):
+        for d in self._detectar_carpetas_rfc(masked_root):
             if not es_rfc_valido(d.name):
+                res.avisos.append(f"Carpeta ignorada (no es un RFC): {d.name}")
                 continue
             ent = self.mapping.buscar_entidad_por_fake(d.name.strip().upper())
             real_folder = ent.real_rfc if ent else d.name
             xmls = sorted(x for x in d.rglob("*.xml") if x.is_file())
             plan.append((d, real_folder, xmls))
             res.total += len(xmls)
+            res.detalle.append(f"Fake {d.name} -> RFC {real_folder}  [{len(xmls)} XML]")
 
         hecho = 0
         for carpeta, real_folder, xmls in plan:
