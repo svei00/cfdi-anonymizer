@@ -40,7 +40,6 @@ class App(ttk.Frame):
         self.var_mapeo = tk.StringVar()
         self.var_seed = tk.StringVar()
         self.var_keep = tk.BooleanVar(value=True)
-        self.var_boveda = tk.BooleanVar(value=False)
         self.var_jitter = tk.BooleanVar(value=False)
         self.var_revertir = tk.BooleanVar(value=False)
 
@@ -57,13 +56,15 @@ class App(ttk.Frame):
         ops.columnconfigure(1, weight=1)
         ttk.Checkbutton(ops, text="Conservar una copia de los originales",
                         variable=self.var_keep).grid(row=0, column=0, sticky="w")
-        ttk.Checkbutton(ops, text="El origen es una Bóveda (RFC/Emitidas/Recibidas)",
-                        variable=self.var_boveda).grid(row=0, column=1, sticky="w")
         ttk.Checkbutton(ops, text="Alterar salarios de Nómina (jitter)",
-                        variable=self.var_jitter).grid(row=1, column=0, sticky="w")
+                        variable=self.var_jitter).grid(row=0, column=1, sticky="w")
         ttk.Checkbutton(ops, text="Modo revertir (reconstruir reales)",
                         variable=self.var_revertir,
-                        command=self._toggle_revertir).grid(row=1, column=1, sticky="w")
+                        command=self._toggle_revertir).grid(row=1, column=0, sticky="w")
+        ttk.Label(ops, text="La estructura Bóveda (RFC/Emitidas|Recibidas/yyyy/mm) "
+                            "se detecta y conserva automáticamente.",
+                  foreground="#555").grid(row=2, column=0, columnspan=2, sticky="w",
+                                          pady=(4, 0))
         fila += 1
 
         sf = ttk.Frame(self)
@@ -127,6 +128,16 @@ class App(ttk.Frame):
         if not destino:
             messagebox.showerror(APP_TITULO, "Selecciona una carpeta de destino.")
             return
+        o = Path(origen).resolve()
+        d = Path(destino).resolve()
+        if o == d or d.is_relative_to(o) or o.is_relative_to(d):
+            messagebox.showerror(
+                APP_TITULO,
+                "El destino no debe estar dentro del origen (ni al revés).\n"
+                "Usa una carpeta separada, por ejemplo:\n"
+                "  Origen:  C:\\AdminXML\\BovedaCFDI\n"
+                "  Destino: C:\\AdminXML\\BovedaCFDI_Anon")
+            return
         seed = None
         if self.var_seed.get().strip():
             try:
@@ -141,7 +152,7 @@ class App(ttk.Frame):
         cfg = dict(
             origen=origen, destino=destino,
             mapeo=self.var_mapeo.get().strip() or None,
-            seed=seed, keep=self.var_keep.get(), boveda=self.var_boveda.get(),
+            seed=seed, keep=self.var_keep.get(),
             jitter=self.var_jitter.get(), revertir=self.var_revertir.get(),
         )
         threading.Thread(target=self._trabajar, args=(cfg,), daemon=True).start()
@@ -154,9 +165,10 @@ class App(ttk.Frame):
                 jitter_salarios=cfg["jitter"], keep_originales=cfg["keep"],
             )
 
-            modo = "Bóveda (espejo)" if cfg["boveda"] else "Carpeta plana"
+            es_bov = Procesador.origen_es_boveda(cfg["origen"])
+            modo = "Bóveda (espejo)" if es_bov else "Carpeta plana"
             accion = "REVERTIR" if cfg["revertir"] else "ENMASCARAR"
-            self.cola.put(("info", f"===== {accion} | modo: {modo} ====="))
+            self.cola.put(("info", f"===== {accion} | modo detectado: {modo} ====="))
             self.cola.put(("info", f"Origen:  {cfg['origen']}"))
             self.cola.put(("info", f"Destino: {cfg['destino']}"))
             self.cola.put(("info", f"Mapeo:   {db_dir}  (mapeo.sqlite)"))
@@ -164,15 +176,10 @@ class App(ttk.Frame):
             def progreso(i, n, nombre):
                 self.cola.put(("progreso", i, n, nombre))
 
-            if cfg["boveda"]:
-                if cfg["revertir"]:
-                    res = proc.revertir_boveda(cfg["origen"], cfg["destino"], progreso)
-                else:
-                    res = proc.procesar_boveda(cfg["origen"], cfg["destino"], progreso)
-            elif cfg["revertir"]:
-                res = proc.revertir_carpeta(cfg["origen"], cfg["destino"], progreso)
+            if cfg["revertir"]:
+                res = proc.revertir(cfg["origen"], cfg["destino"], progreso)
             else:
-                res = proc.procesar_carpeta(cfg["origen"], progreso)
+                res = proc.procesar(cfg["origen"], cfg["destino"], progreso)
             proc.close()
             self.cola.put(("fin", res, cfg["revertir"]))
         except Exception as e:  # noqa: BLE001

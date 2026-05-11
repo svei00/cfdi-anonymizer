@@ -114,6 +114,41 @@ class Procesador:
     # Modo Bóveda (espejo): refleja <RFC>/<Emitidas|Recibidas>/<yyyy>/<MM>
     # renombrando SÓLO la carpeta de RFC a su fake; conserva el resto.
     # ==================================================================
+    # ------------------------------------------------------------------
+    # Despachadores con AUTO-DETECCIÓN de modo (espejo Bóveda vs plano).
+    # Evita que una opción mal puesta tire los archivos sin estructura.
+    # ------------------------------------------------------------------
+    @staticmethod
+    def origen_es_boveda(origen: Path | str) -> bool:
+        """True si el origen parece una Bóveda (carpeta de RFC con
+        Emitidas/Recibidas, o raíz con subcarpetas de RFC)."""
+        origen = Path(origen)
+        if not origen.is_dir():
+            return False
+        subdirs = [p for p in origen.iterdir() if p.is_dir()]
+        sub_lower = {p.name.lower() for p in subdirs}
+        if EMITIDAS.lower() in sub_lower or RECIBIDAS.lower() in sub_lower:
+            return True
+        if es_rfc_valido(origen.name):
+            return True
+        return any(es_rfc_valido(p.name) for p in subdirs)
+
+    def procesar(self, origen: Path | str, dest_root: Path | str | None = None,
+                 progreso: Progreso | None = None) -> Resultado:
+        """Enmascara detectando el modo: Bóveda (espejo) o carpeta plana."""
+        if self.origen_es_boveda(origen):
+            return self.procesar_boveda(origen, dest_root, progreso)
+        res = self.procesar_carpeta(origen, progreso)
+        res.detalle.insert(0, "Modo: carpeta plana (no se detectó estructura Bóveda)")
+        return res
+
+    def revertir(self, origen: Path | str, dest_root: Path | str,
+                 progreso: Progreso | None = None) -> Resultado:
+        """Revierte detectando el modo: Bóveda (espejo) o carpeta plana."""
+        if self.origen_es_boveda(origen):
+            return self.revertir_boveda(origen, dest_root, progreso)
+        return self.revertir_carpeta(origen, dest_root, progreso)
+
     @staticmethod
     def _detectar_carpetas_rfc(source_root: Path) -> list[Path]:
         """Devuelve las carpetas de RFC a procesar.
@@ -175,6 +210,7 @@ class Procesador:
 
         # Reunir carpetas de RFC válidas y contar archivos (para el progreso).
         carpetas = self._detectar_carpetas_rfc(source_root)
+        res.detalle.append("Modo: Bóveda (espejo, conserva RFC/Emitidas|Recibidas/yyyy/mm)")
         res.detalle.append(f"Origen: {source_root}")
         res.detalle.append(f"Destino: {dest_root}")
         res.detalle.append(f"Carpetas candidatas encontradas: {len(carpetas)}")

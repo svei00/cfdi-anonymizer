@@ -31,11 +31,15 @@ python main.py
    Nómina, **modo revertir**, semilla.
 5. **Ejecutar**.
 
-### Modo Bóveda (espejo)
+### Modo Bóveda (espejo) — automático
 
-Si tu origen ya es una Bóveda existente con la estructura
-`<RFC>/<Emitidas|Recibidas>/<yyyy>/<MM>/` (p. ej. `C:\AdminXML\BovedaCFDI`),
-marca **"El origen es una Bóveda"**. La app:
+El modo se **detecta solo**: si el origen tiene forma de Bóveda
+(`<RFC>/<Emitidas|Recibidas>/<yyyy>/<MM>/`), la app refleja la estructura; si es
+una carpeta de XML sueltos, los procesa en plano. No hay casilla que recordar.
+
+Acepta como origen **la Bóveda raíz** (con muchas carpetas de RFC, p. ej.
+`C:\AdminXML\BovedaCFDI`) **o una sola carpeta de RFC** (p. ej.
+`C:\AdminXML\BovedaCFDI\GOOH841231EPA`). En modo Bóveda:
 
 - **Refleja** el árbol en el destino, **renombrando sólo la carpeta de RFC** a
   su RFC falso (consistente); conserva `Emitidas/Recibidas/yyyy/MM` y NO crea
@@ -46,10 +50,12 @@ marca **"El origen es una Bóveda"**. La app:
   carpeta (y `Recibidas/` → `cfdi:Receptor`). Si algo está desubicado, lo
   enmascara igual y lo reporta como AVISO. Las carpetas que no son RFC se
   ignoran con aviso.
+- El destino **no puede estar dentro del origen** (la app lo bloquea). Usa una
+  carpeta separada, p. ej. `C:\AdminXML\BovedaCFDI_Anon`.
 
-Para **revertir**: marca "Modo revertir" (con o sin "El origen es una Bóveda",
-según corresponda), pon como origen la carpeta de mocks y apunta la carpeta de
-mapeo al `mapeo.sqlite` usado al enmascarar.
+Para **revertir**: marca "Modo revertir", pon como origen la carpeta de mocks y
+apunta la carpeta de mapeo al `mapeo.sqlite` usado al enmascarar (el modo espejo
+se detecta igual).
 
 ## Qué se enmascara / qué se conserva
 
